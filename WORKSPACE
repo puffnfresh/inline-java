@@ -1,9 +1,11 @@
 workspace(name = "io_tweag_inline_java")
 
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
 http_archive(
   name = "io_tweag_rules_haskell",
-  strip_prefix = "rules_haskell-730d42c225f008a13e48bf5e9c13010174324b8c",
-  urls = ["https://github.com/tweag/rules_haskell/archive/730d42c225f008a13e48bf5e9c13010174324b8c.tar.gz"]
+  strip_prefix = "rules_haskell-59cdb5b2fae065d8dc3837f7a9535e3060aaa383",
+  urls = ["https://github.com/tweag/rules_haskell/archive/59cdb5b2fae065d8dc3837f7a9535e3060aaa383.tar.gz"]
 )
 
 load("@io_tweag_rules_haskell//haskell:repositories.bzl", "haskell_repositories")
@@ -11,8 +13,8 @@ haskell_repositories()
 
 http_archive(
   name = "io_tweag_rules_nixpkgs",
-  strip_prefix = "rules_nixpkgs-d9df5c834f07c72be1b9e320eb742796557612f8",
-  urls = ["https://github.com/tweag/rules_nixpkgs/archive/d9df5c834f07c72be1b9e320eb742796557612f8.tar.gz"]
+  strip_prefix = "rules_nixpkgs-0.5.2",
+  urls = ["https://github.com/tweag/rules_nixpkgs/archive/v0.5.2.tar.gz"]
 )
 
 load("@io_tweag_rules_nixpkgs//nixpkgs:nixpkgs.bzl",
@@ -42,6 +44,7 @@ prebuilt_packages = [
   "filepath",
   "ghc",
   "hspec",
+  "hspec-discover",
   "inline-c",
   "language-java",
   "mtl",

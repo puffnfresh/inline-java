@@ -38,11 +38,11 @@ import Prelude hiding ((<>))
 #endif
 import TyCoRep
 import TysWiredIn (nilDataConName, consDataConName)
-import System.Directory (listDirectory)
+import System.Directory (doesFileExist, listDirectory)
 import System.FilePath ((</>), (<.>), takeDirectory)
-import System.IO (withFile, IOMode(WriteMode), hPutStrLn, stderr)
+import System.IO (withFile, IOMode(..), hGetLine, hPutStrLn, stderr)
 import System.IO.Temp (withSystemTempDirectory)
-import System.Process (callProcess)
+import qualified System.Process
 
 -- The 'java' quasiquoter produces annotations of type 'JavaImport', and it also
 -- inserts calls in the code to the function 'qqMarker'.
@@ -229,7 +229,7 @@ buildBytecode unit = do
     liftIO $ withSystemTempDirectory "inlinejava" $ \dir -> do
       let src = dir </> mangle m <.> "java"
       withFile src WriteMode $ \h -> Builder.hPutBuilder h unit
-      callProcess "javac" [src]
+      callJavac src
       -- A single compilation unit can produce multiple class files.
       classFiles <- filter (".class" `isSuffixOf`) <$> listDirectory dir
       forM classFiles $ \classFile -> do
@@ -237,6 +237,25 @@ buildBytecode unit = do
         -- Strip the .class suffix.
         let klass = "io.tweag.inlinejava." ++ takeWhile (/= '.') classFile
         return $ DotClass klass bcode
+  where
+    callJavac :: String -> IO ()
+    callJavac src = do
+          -- Produces the filepath of the javac program read from the file
+          -- javac.location if present, otherwise it is just javac.
+      let buildtimeJavac = $(do
+            let javacLocFile = "bazel-out/k8-fastbuild/genfiles/javac.location"
+            exists <- TH.runIO $ doesFileExist javacLocFile
+            when exists $
+              TH.addDependentFile javacLocFile
+            TH.litE . TH.stringL =<< do
+              TH.runIO $ print (exists, javacLocFile)
+              if exists then
+                TH.runIO $ withFile javacLocFile ReadMode hGetLine
+              else return "javac"
+            )
+      exists <- doesFileExist buildtimeJavac
+      let runtimeJavac = if exists then buildtimeJavac else "javac"
+      System.Process.callProcess runtimeJavac [src]
 
 -- | The names of 'JType' data constructors
 data JTypeNames = JTypeNames

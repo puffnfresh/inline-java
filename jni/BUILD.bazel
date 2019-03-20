@@ -3,29 +3,40 @@ package(default_visibility = ["//visibility:public"])
 load(
   "@io_tweag_rules_haskell//haskell:haskell.bzl",
   "haskell_cc_import",
+  "haskell_import",
   "haskell_library",
 )
 
-haskell_cc_import(
+cc_library(
   name = "openjdk",
-  shared_library = "@openjdk//:lib",
+  srcs = ["@openjdk//:lib"],
   hdrs = ["@openjdk//:jni_header", "@openjdk//:jni_md_header"],
   strip_include_prefix = "/external/openjdk/include",
 )
+
+haskell_import(name = "base")
+haskell_import(name = "bytestring")
+haskell_import(name = "choice")
+haskell_import(name = "containers")
+haskell_import(name = "constraints")
+haskell_import(name = "deepseq")
+haskell_import(name = "inline-c")
+haskell_import(name = "singletons")
 
 haskell_library(
   name = "jni",
   src_strip_prefix = "src",
   srcs = glob(['src/**/*.hs', 'src/**/*.hsc']),
-  deps = [":openjdk"],
-  prebuilt_dependencies = [
-    "base",
-    "bytestring",
-    "choice",
-    "containers",
-    "constraints",
-    "deepseq",
-    "inline-c",
-    "singletons",
+  deps = [
+    ":openjdk",
+    ":base",
+    ":bytestring",
+    ":choice",
+    ":containers",
+    ":constraints",
+    ":deepseq",
+    ":inline-c",
+    ":singletons",
   ],
+  version = "0.6.1",
 )

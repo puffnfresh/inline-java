@@ -3,6 +3,8 @@ package(default_visibility = ["//visibility:public"])
 load(
   "@io_tweag_rules_haskell//haskell:haskell.bzl",
   "haskell_test",
+  "haskell_cc_import",
+  "haskell_import",
   "haskell_library",
   "haskell_toolchain",
 )
@@ -18,8 +20,32 @@ haskell_toolchain(
   name = "inline-java-toolchain",
   version = "8.2.2",
   tools = "@inline-java-toolchain//:bin",
-  extra_binaries = ["@openjdk//:bin"],
 )
+
+# A rule that writes the location of javac to a text file.
+genrule(
+  name = "javac",
+  srcs = [],
+  outs = ["javac.location"],
+  cmd = "echo $$(realpath $(JAVABASE)/bin/javac) > $@",
+  toolchains = ["@bazel_tools//tools/jdk:current_java_runtime"]
+)
+
+haskell_import(name = "base")
+haskell_import(name = "bytestring")
+haskell_import(name = "Cabal")
+haskell_import(name = "directory")
+haskell_import(name = "filepath")
+haskell_import(name = "filemanip")
+haskell_import(name = "ghc")
+haskell_import(name = "language-java")
+haskell_import(name = "mtl")
+haskell_import(name = "process")
+haskell_import(name = "text")
+haskell_import(name = "template-haskell")
+haskell_import(name = "temporary")
+haskell_import(name = "hspec")
+haskell_import(name = "hspec-discover")
 
 haskell_library(
   name = "inline-java",
@@ -27,42 +53,55 @@ haskell_library(
   # cbits/bctable.h is included here so it can be found by Plugin.hs
   # at the same location when building with bazel as with stack.
   srcs = glob(['src/**/*.hs', 'src/**/*.hsc', 'cbits/bctable.h']),
+  extra_srcs = ["javac"],
   deps = [
     "//jni",
     "//jvm",
     ":bctable",
+    ":base",
+    ":bytestring",
+    ":Cabal",
+    ":directory",
+    ":filepath",
+    ":filemanip",
+    ":ghc",
+    ":language-java",
+    ":mtl",
+    ":process",
+    ":text",
+    ":template-haskell",
+    ":temporary"
   ],
-  prebuilt_dependencies = [
-    "base",
-    "bytestring",
-    "Cabal",
-    "directory",
-    "filepath",
-    "filemanip",
-    "ghc",
-    "language-java",
-    "mtl",
-    "process",
-    "text",
-    "template-haskell",
-    "temporary"
-  ],
+  version = "0.8.4"
 )
 
-# Can't find hspec-discover
-#haskell_test(
-#  name = "spec",
-#  src_strip_prefix = "tests",
-#  srcs = glob(["tests/**/*.hs"]),
-#  deps = [
-#    "//jni",
-#    "//jvm",
-#    ":inline-java"
-#  ],
-#  prebuilt_dependencies = [
-#    "base",
-#    "hspec",
-#    "text",
-#  ],
-#  size = "small",
-#)
+cc_library(
+  name = "openjdk",
+  srcs = ["@openjdk//:lib"],
+  hdrs = ["@openjdk//:jni_header", "@openjdk//:jni_md_header"],
+  strip_include_prefix = "/external/openjdk/include",
+)
+
+# A rule that generates the test driver.
+genrule(
+  name = "hspec-driver",
+  srcs = glob(["tests/**/*.hs"]),
+  outs = ["Spec.hs"],
+  cmd = "$(location @inline-java-toolchain//:bin/hspec-discover) tests/Spec.hs tests/Spec.hs $@ --module-name=Spec",
+  tools = ["@inline-java-toolchain//:bin/hspec-discover"],
+)
+
+haskell_test(
+  name = "spec",
+  src_strip_prefix = "tests",
+  srcs = glob(["tests/Language/**/*.hs", "tests/Main.hs"]) + ["hspec-driver"],
+  deps = [
+    "//jni",
+    "//jvm",
+	":openjdk",
+    ":inline-java",
+    ":base",
+    ":hspec",
+    ":text",
+  ],
+)

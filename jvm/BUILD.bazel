@@ -2,25 +2,35 @@ package(default_visibility = ["//visibility:public"])
 
 load(
   "@io_tweag_rules_haskell//haskell:haskell.bzl",
+  "haskell_import",
   "haskell_library",
 )
+
+haskell_import(name = "base")
+haskell_import(name = "bytestring")
+haskell_import(name = "constraints")
+haskell_import(name = "choice")
+haskell_import(name = "distributed-closure")
+haskell_import(name = "exceptions")
+haskell_import(name = "singletons")
+haskell_import(name = "text")
+haskell_import(name = "vector")
 
 haskell_library(
   name = "jvm",
   src_strip_prefix = "src",
   srcs = glob(['src/**/*.hs']),
+  version = "0.4.2",
   deps = [
     "//jni",
-  ],
-  prebuilt_dependencies = [
-    "base",
-    "bytestring",
-    "constraints",
-    "choice",
-    "distributed-closure",
-    "exceptions",
-    "singletons",
-    "text",
-    "vector",
+    ":base",
+    ":bytestring",
+    ":constraints",
+    ":choice",
+    ":distributed-closure",
+    ":exceptions",
+    ":singletons",
+    ":text",
+    ":vector",
   ],
 )
