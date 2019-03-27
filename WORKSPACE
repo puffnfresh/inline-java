@@ -4,8 +4,8 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
   name = "io_tweag_rules_haskell",
-  strip_prefix = "rules_haskell-59cdb5b2fae065d8dc3837f7a9535e3060aaa383",
-  urls = ["https://github.com/tweag/rules_haskell/archive/59cdb5b2fae065d8dc3837f7a9535e3060aaa383.tar.gz"]
+  strip_prefix = "rules_haskell-adcd5989cfab843a25c4793963e5fcb15e3e9808",
+  urls = ["https://github.com/tweag/rules_haskell/archive/adcd5989cfab843a25c4793963e5fcb15e3e9808.tar.gz"]
 )
 
 load("@io_tweag_rules_haskell//haskell:repositories.bzl", "haskell_repositories")
@@ -78,7 +78,10 @@ nixpkgs_package(
   build_file_content = """
 filegroup (
   name = "lib",
-  srcs = ["lib/openjdk/jre/lib/amd64/server/libjvm.so"],
+  srcs = [
+    "lib/openjdk/jre/lib/amd64/server/libjvm.so",
+	"lib/openjdk/jre/lib/amd64/libjava.so",
+  ],
   visibility = ["//visibility:public"],
 )
 filegroup (
