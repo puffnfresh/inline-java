@@ -264,9 +264,9 @@ toJavaType JTypeNames {..} t0 = BS.concat <$> go t0
     go :: Type -> Maybe [BS.ByteString]
     go (TyConApp c [LitTy (StrTyLit fs)])
       | Just n <- nameClass, tyConName c == n =
-        Just [substDollar $ fastStringToByteString fs]
+        Just [substDollar $ bytesFS fs]
       | Just n <- nameIface, tyConName c == n =
-        Just [substDollar $ fastStringToByteString fs]
+        Just [substDollar $ bytesFS fs]
     go (TyConApp c [t])
       | Just n <- nameArray, tyConName c == n =
         (++ ["[]"]) <$> go t
@@ -280,7 +280,7 @@ toJavaType JTypeNames {..} t0 = BS.concat <$> go t0
         Just ["void"]
     go (TyConApp c [LitTy (StrTyLit fs)])
       | Just n <- namePrim, tyConName c == n =
-        Just [fastStringToByteString fs]
+        Just [bytesFS fs]
     go _ = Nothing
 
     listGo :: Type -> Maybe [[BS.ByteString]]
@@ -371,9 +371,9 @@ collectQQMarkers qqMarkerName p0 = do
       tell $ Endo $ (:) $ QQOcc
         { qqOccResTy = tyres
         , qqOccArgTys = tyargs
-        , qqOccInput = fastStringToByteString fs_input
-        , qqOccMName = fastStringToByteString fs_mname
-        , qqOccAntiQs = fastStringToByteString fs_antiqs
+        , qqOccInput = bytesFS fs_input
+        , qqOccMName = bytesFS fs_mname
+        , qqOccAntiQs = bytesFS fs_antiqs
         , qqOccLineNumber = lineNumber
         }
       return e

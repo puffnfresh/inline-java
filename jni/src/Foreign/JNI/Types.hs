@@ -76,12 +76,6 @@ import Data.Int
 import qualified Data.Map as Map
 import Data.Monoid ((<>))
 import Data.Singletons
-  ( Sing
-  , SingI(..)
-  , SomeSing(..)
-  )
-import Data.Singletons.Prelude (Sing(..))
-import Data.Singletons.TypeLits (KnownSymbol, symbolVal)
 import Data.Word
 import Foreign.C (CChar)
 import Foreign.ForeignPtr
@@ -97,7 +91,7 @@ import qualified Foreign.JNI.String as JNI
 import Foreign.Marshal.Alloc (allocaBytesAligned)
 import Foreign.Ptr
 import Foreign.Storable (Storable(..))
-import GHC.TypeLits (Symbol)
+import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import Language.C.Types (TypeSpecifier(TypeName))
 import Language.C.Inline.Context (Context(..), fptrCtx)
 import System.IO.Unsafe (unsafePerformIO)
@@ -163,6 +157,12 @@ data instance Sing (a :: JType) where
 
 realShowsPrec :: Show a => Int -> a -> ShowS
 realShowsPrec = showsPrec
+
+
+instance Show (Sing (a :: [JType])) where
+  showsPrec _ SNil = showString "SNil"
+  showsPrec d (SCons ty tys) = showParen (d > 10) $
+      showString "SCons " . showsPrec 11 ty . showChar ' ' . showsPrec 11 tys
 
 instance Show (Sing (a :: JType)) where
   showsPrec d (SClass s) = showParen (d > 10) $
