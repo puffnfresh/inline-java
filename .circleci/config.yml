@@ -64,8 +64,7 @@ jobs:
           name: Install software
           command: |
             brew update
-            brew tap AdoptOpenJDK/openjdk
-            brew install adoptopenjdk-openjdk8 gradle
+            brew install gradle
       - run:
           name: Compute cache key
           command: |
@@ -84,7 +83,7 @@ jobs:
       - run:
           name: Build and test
           command: |
-            export JAVA_HOME=/usr/local/opt/adoptopenjdk-openjdk8
+            export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_152.jdk/Contents/Home
             ~/.local/bin/stack --no-terminal build -j2 \
                 --test \
                 --extra-lib-dirs=$JAVA_HOME/jre/lib/server/ \
