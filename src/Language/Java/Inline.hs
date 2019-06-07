@@ -50,6 +50,9 @@ module Language.Java.Inline
   ( java
   , imports
   , loadJavaWrappers
+  -- * Internal definitions
+  , javaWithConfig
+  , QQConfig(..)
   ) where
 
 import Data.Data
@@ -57,7 +60,8 @@ import Data.List (isPrefixOf, intercalate, isSuffixOf, nub)
 import Data.String (fromString)
 import Foreign.JNI (defineClass)
 import Language.Java
-import Language.Java.Inline.Magic
+import qualified Language.Java.Inline.Magic as Magic
+import qualified Language.Java.Inline.QQMarker as QQMarker
 import qualified Language.Java.Lexer as Java
 import Language.Haskell.TH.Quote
 import qualified Language.Haskell.TH as TH
@@ -107,8 +111,16 @@ import System.IO.Unsafe (unsafePerformIO)
 -- quasiquote, whose type is 'Coercible' to a Java primitive or reference type.
 --
 java :: QuasiQuoter
-java = QuasiQuoter
-    { quoteExp = \txt -> blockOrExpQQ txt
+java = javaWithConfig QQConfig
+    { qqMarker = 'QQMarker.qqMarker
+    , qqCallStatic = 'callStatic
+    , qqCoerce = 'coerce
+    , qqWrapMarker = \qExp -> [| loadJavaWrappers >> $qExp |]
+    }
+
+javaWithConfig :: QQConfig -> QuasiQuoter
+javaWithConfig config = QuasiQuoter
+    { quoteExp = \txt -> blockOrExpQQ config txt
     , quotePat  = error "Language.Java.Inline: quotePat"
     , quoteType = error "Language.Java.Inline: quoteType"
     , quoteDec  = error "Language.Java.Inline: quoteDec"
@@ -137,9 +149,9 @@ setIJState = TH.putQ
 --
 imports :: String -> Q [TH.Dec]
 imports imp = do
-    tJI <- [t| JavaImport |]
+    tJI <- [t| Magic.JavaImport |]
     lineNumber <- fromIntegral . fst . TH.loc_start <$> TH.location
-    expJI <- TH.lift (JavaImport imp lineNumber)
+    expJI <- TH.lift (Magic.JavaImport imp lineNumber)
     TH.addTopDecls
       -- {-# ANN module (JavaImport imp :: JavaImport) #-}
       [ TH.PragmaD $ TH.AnnP TH.ModuleAnnotation (TH.SigE expJI tJI) ]
@@ -162,45 +174,58 @@ loadJavaWrappers = doit `seq` return ()
       loader :: J ('Class "java.lang.ClassLoader") <- do
         thr <- callStatic "java.lang.Thread" "currentThread" []
         call (thr :: J ('Class "java.lang.Thread")) "getContextClassLoader" []
-      forEachDotClass $ \DotClass{..} -> do
+      Magic.forEachDotClass $ \Magic.DotClass{..} -> do
         _ <- defineClass (referenceTypeName (SClass className)) loader classBytecode
         return ()
       pop
 
 mangle :: TH.Module -> String
 mangle (TH.Module (TH.PkgName pkgname) (TH.ModName mname)) =
-    mangleClassName pkgname mname
+    Magic.mangleClassName pkgname mname
 
-blockOrExpQQ :: String -> Q TH.Exp
-blockOrExpQQ txt@(words -> toks) -- ignore whitespace
+data QQConfig = QQConfig
+  { qqMarker :: TH.Name
+  , qqCallStatic :: TH.Name
+  , qqCoerce :: TH.Name
+  , qqWrapMarker :: TH.ExpQ -> TH.ExpQ
+  }
+
+blockOrExpQQ :: QQConfig -> String -> Q TH.Exp
+blockOrExpQQ config txt@(words -> toks) -- ignore whitespace
   | ["{"] `isPrefixOf` toks
-  , ["}"] `isSuffixOf` toks = blockQQ txt
-  | otherwise = expQQ txt
+  , ["}"] `isSuffixOf` toks = blockQQ config txt
+  | otherwise = expQQ config txt
 
-expQQ :: String -> Q TH.Exp
-expQQ input = blockQQ $ "{ return " ++ input ++ "; }"
+expQQ :: QQConfig -> String -> Q TH.Exp
+expQQ config input = blockQQ config $ "{ return " ++ input ++ "; }"
 
-blockQQ :: String -> Q TH.Exp
-blockQQ input = do
+blockQQ :: QQConfig -> String -> Q TH.Exp
+blockQQ config input = do
       idx <- nextMethodIdx
       let mname = "inline__method_" ++ show idx
           vnames = nub
             [ n | Java.L _ (Java.IdentTok ('$' : n)) <- Java.lexer input ]
+          args = [ [| $(TH.varE (qqCoerce config)) $(TH.varE name) |]
+                 | name <- thnames'
+                 ]
           thnames = map TH.mkName vnames
+          thnames' = map TH.mkName (map ('_':) vnames)
 
-      -- Return a call to the static method we just generated.
-      let args = [ [| coerce $(TH.varE name) |] | name <- thnames ]
       thismod <- TH.thisModule
       lineNumber <- fromIntegral . fst . TH.loc_start <$> TH.location
-      [| loadJavaWrappers >>
-         qqMarker
+      -- Return a call to the static method we just generated.
+      qqWrapMarker config $ do
+        [| $(TH.varE (qqMarker config))
              (Proxy :: Proxy $(TH.litT $ TH.strTyLit input))
              (Proxy :: Proxy $(TH.litT $ TH.strTyLit mname))
              (Proxy :: Proxy $(TH.litT $ TH.strTyLit $ intercalate "," vnames))
              (Proxy :: Proxy $(TH.litT $ TH.numTyLit $ lineNumber))
              $(return $ foldr (\a b -> TH.TupE [TH.VarE a, b]) (TH.TupE []) thnames)
              Proxy
-             (callStatic
-             (fromString $(TH.stringE ("io.tweag.inlinejava." ++ mangle thismod)))
-             (fromString $(TH.stringE mname))
-             $(TH.listE args)) |]
+             (\ $(return $ foldr (\a b -> TH.TupP [TH.VarP a, b]) (TH.TupP []) thnames') ->
+              $(TH.varE (qqCallStatic config))
+               (fromString $(TH.stringE ("io.tweag.inlinejava." ++ mangle thismod)))
+               (fromString $(TH.stringE mname))
+               $(TH.listE args)
+             )
+             |]

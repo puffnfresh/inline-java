@@ -3,3 +3,4 @@
 build/
 jni/src/Foreign/JNI.c
 bazel-*
+.*.swp

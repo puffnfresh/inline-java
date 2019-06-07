@@ -32,6 +32,8 @@ extra-deps:
   commit: 9b1c3a83e5e427d39c60dc847c4e4d660ae2e8cb
   subdirs:
   - inline-c
+- git: https://github.com/tweag/linear-base
+  commit: 0d6165fbd8ad84dd1574a36071f00a6137351637
 
 
 allow-newer: true

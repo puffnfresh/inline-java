@@ -22,8 +22,12 @@ library
   hs-source-dirs: src
   exposed-modules:
     Language.Java
+  if impl(ghc >= 8.9)
+    exposed-modules:
+      Language.Java.Linear
   build-depends:
     base >=4.7 && <5,
+    linear-base,
     bytestring >=0.10,
     constraints >=0.8,
     choice >=0.1,

@@ -46,6 +46,7 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StaticPointers #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -83,6 +84,11 @@ module Language.Java
   , Reflect(..)
   -- * Re-exports
   , sing
+  -- * Internal functions
+  , newJ
+  , callToJValue
+  , callStaticToJValue
+  , getStaticFieldAsJValue
   ) where
 
 import Control.Distributed.Closure.TH
@@ -292,7 +298,17 @@ new
   => [JValue]
   -> IO a
 {-# INLINE new #-}
-new args = do
+new args = Coerce.coerce <$> newJ @sym args
+
+newJ
+  :: forall sym ty.
+     ( ty ~ 'Class sym
+     , SingI ty
+     )
+  => [JValue]
+  -> IO (J ty)
+{-# INLINE newJ #-}
+newJ args = do
     let argsings = map jtypeOf args
         voidsing = sing :: Sing 'Void
         klass = unsafeDupablePerformIO $ do
@@ -300,7 +316,7 @@ new args = do
           gk <- newGlobalRef lk
           deleteLocalRef lk
           return gk
-    Coerce.coerce <$> newObject klass (methodSignature argsings voidsing) args
+    unsafeCast <$> newObject klass (methodSignature argsings voidsing) args
 
 -- | Creates a new Java array of the given size. The type of the elements
 -- of the resulting array is determined by the return type a call to
@@ -368,8 +384,19 @@ call
   -> IO b
 {-# INLINE call #-}
 call obj mname args = do
+    unsafeUncoerce <$>
+      callToJValue (sing :: Sing ty2) (Coerce.coerce obj :: J ty1) mname args
+
+callToJValue
+  :: forall ty1 k. (IsReferenceType ty1, SingI ty1)
+  => Sing (k :: JType)
+  -> J ty1 -- ^ Any object
+  -> JNI.String -- ^ Method name
+  -> [JValue] -- ^ Arguments
+  -> IO JValue
+{-# INLINE callToJValue #-}
+callToJValue retsing obj mname args = do
     let argsings = map jtypeOf args
-        retsing = sing :: Sing ty2
         klass = unsafeDupablePerformIO $ do
                   lk <- findClass (referenceTypeName (sing :: Sing ty1))
                   gk <- newGlobalRef lk
@@ -377,19 +404,20 @@ call obj mname args = do
                   return gk
         method = unsafeDupablePerformIO $ getMethodID klass mname (methodSignature argsings retsing)
     case retsing of
-      SPrim "boolean" -> unsafeUncoerce . coerce <$> callBooleanMethod obj method args
-      SPrim "byte" -> unsafeUncoerce . coerce <$> callByteMethod obj method args
-      SPrim "char" -> unsafeUncoerce . coerce <$> callCharMethod obj method args
-      SPrim "short" -> unsafeUncoerce . coerce <$> callShortMethod obj method args
-      SPrim "int" -> unsafeUncoerce . coerce <$> callIntMethod obj method args
-      SPrim "long" -> unsafeUncoerce . coerce <$> callLongMethod obj method args
-      SPrim "float" -> unsafeUncoerce . coerce <$> callFloatMethod obj method args
-      SPrim "double" -> unsafeUncoerce . coerce <$> callDoubleMethod obj method args
+      SPrim "boolean" -> JBoolean . fromIntegral . fromEnum <$>
+                           callBooleanMethod obj method args
+      SPrim "byte" -> JByte <$> callByteMethod obj method args
+      SPrim "char" -> JChar <$> callCharMethod obj method args
+      SPrim "short" -> JShort <$> callShortMethod obj method args
+      SPrim "int" -> JInt <$> callIntMethod obj method args
+      SPrim "long" -> JLong <$> callLongMethod obj method args
+      SPrim "float" -> JFloat <$> callFloatMethod obj method args
+      SPrim "double" -> JDouble <$> callDoubleMethod obj method args
       SVoid -> do
         callVoidMethod obj method args
-        -- Anything uncoerces to the void type.
-        return (unsafeUncoerce undefined)
-      _ -> unsafeUncoerce . coerce <$> callObjectMethod obj method args
+        -- The void result is not inspected.
+        return (error "inspected output of method returning void")
+      _ -> JObject <$> callObjectMethod obj method args
 
 -- | Same as 'call', but for static methods.
 callStatic
@@ -399,9 +427,18 @@ callStatic
   -> [JValue] -- ^ Arguments
   -> IO a
 {-# INLINE callStatic #-}
-callStatic cname mname args = do
+callStatic cname mname args =
+    unsafeUncoerce <$> callStaticToJValue (sing :: Sing ty) cname mname args
+
+callStaticToJValue
+  :: Sing (k :: JType)
+  -> JNI.String -- ^ Class name
+  -> JNI.String -- ^ Method name
+  -> [JValue] -- ^ Arguments
+  -> IO JValue
+{-# INLINE callStaticToJValue #-}
+callStaticToJValue retsing cname mname args = do
     let argsings = map jtypeOf args
-        retsing = sing :: Sing ty
         klass = unsafeDupablePerformIO $ do
                   lk <- findClass
                           (referenceTypeName (SClass (JNI.toChars cname)))
@@ -410,19 +447,20 @@ callStatic cname mname args = do
                   return gk
         method = unsafeDupablePerformIO $ getStaticMethodID klass mname (methodSignature argsings retsing)
     case retsing of
-      SPrim "boolean" -> unsafeUncoerce . coerce <$> callStaticBooleanMethod klass method args
-      SPrim "byte" -> unsafeUncoerce . coerce <$> callStaticByteMethod klass method args
-      SPrim "char" -> unsafeUncoerce . coerce <$> callStaticCharMethod klass method args
-      SPrim "short" -> unsafeUncoerce . coerce <$> callStaticShortMethod klass method args
-      SPrim "int" -> unsafeUncoerce . coerce <$> callStaticIntMethod klass method args
-      SPrim "long" -> unsafeUncoerce . coerce <$> callStaticLongMethod klass method args
-      SPrim "float" -> unsafeUncoerce . coerce <$> callStaticFloatMethod klass method args
-      SPrim "double" -> unsafeUncoerce . coerce <$> callStaticDoubleMethod klass method args
+      SPrim "boolean" -> JBoolean . fromIntegral . fromEnum <$>
+                           callStaticBooleanMethod klass method args
+      SPrim "byte" -> JByte <$> callStaticByteMethod klass method args
+      SPrim "char" -> JChar <$> callStaticCharMethod klass method args
+      SPrim "short" -> JShort <$> callStaticShortMethod klass method args
+      SPrim "int" -> JInt <$> callStaticIntMethod klass method args
+      SPrim "long" -> JLong <$> callStaticLongMethod klass method args
+      SPrim "float" -> JFloat <$> callStaticFloatMethod klass method args
+      SPrim "double" -> JDouble <$> callStaticDoubleMethod klass method args
       SVoid -> do
         callStaticVoidMethod klass method args
-        -- Anything uncoerces to the void type.
-        return (unsafeUncoerce undefined)
-      _ -> unsafeUncoerce . coerce <$> callStaticObjectMethod klass method args
+        -- The void result is not inspected.
+        return (error "inspected output of method returning void")
+      _ -> JObject <$> callStaticObjectMethod klass method args
 
 -- | Get a static field.
 getStaticField
@@ -431,28 +469,33 @@ getStaticField
   -> JNI.String -- ^ Static field name
   -> IO a
 {-# INLINE getStaticField #-}
-getStaticField cname fname = do
-  let retsing = sing :: Sing ty
-      klass = unsafeDupablePerformIO $ do
+getStaticField cname fname =
+    unsafeUncoerce <$> getStaticFieldAsJValue (sing :: Sing ty) cname fname
+
+getStaticFieldAsJValue
+  :: Sing (ty :: JType)
+  -> JNI.String -- ^ Class name
+  -> JNI.String -- ^ Static field name
+  -> IO JValue
+{-# INLINE getStaticFieldAsJValue #-}
+getStaticFieldAsJValue retsing cname fname = do
+  let klass = unsafeDupablePerformIO $ do
                 lk <- findClass (referenceTypeName (SClass (JNI.toChars cname)))
                 gk <- newGlobalRef lk
                 deleteLocalRef lk
                 return gk
       field = unsafeDupablePerformIO $ getStaticFieldID klass fname (signature retsing)
   case retsing of
-    SPrim "boolean" -> unsafeUncoerce . coerce . w2b <$> getStaticBooleanField klass field
-    SPrim "byte" -> unsafeUncoerce . coerce <$> getStaticByteField klass field
-    SPrim "char" -> unsafeUncoerce . coerce <$> getStaticCharField klass field
-    SPrim "short" -> unsafeUncoerce . coerce <$> getStaticShortField klass field
-    SPrim "int" -> unsafeUncoerce . coerce <$> getStaticIntField klass field
-    SPrim "long" -> unsafeUncoerce . coerce <$> getStaticLongField klass field
-    SPrim "float" -> unsafeUncoerce . coerce <$> getStaticFloatField klass field
-    SPrim "double" -> unsafeUncoerce . coerce <$> getStaticDoubleField klass field
+    SPrim "boolean" -> JBoolean <$> getStaticBooleanField klass field
+    SPrim "byte" -> JByte <$> getStaticByteField klass field
+    SPrim "char" -> JChar <$> getStaticCharField klass field
+    SPrim "short" -> JShort <$> getStaticShortField klass field
+    SPrim "int" -> JInt <$> getStaticIntField klass field
+    SPrim "long" -> JLong <$> getStaticLongField klass field
+    SPrim "float" -> JFloat <$> getStaticFloatField klass field
+    SPrim "double" -> JDouble <$> getStaticDoubleField klass field
     SVoid -> fail "getStaticField cannot yield an object of type void"
-    _ -> unsafeUncoerce . coerce <$> getStaticObjectField klass field
-  where
-    w2b :: Word8 -> Bool
-    w2b = toEnum . fromIntegral
+    _ -> JObject <$> getStaticObjectField klass field
 
 -- | Inject a value (of primitive or reference type) to a 'JValue'. This
 -- datatype is useful for e.g. passing arguments as a list of homogeneous type.
@@ -793,3 +836,22 @@ withStatic [d|
         deleteLocalRef jx
       return array
   |]
+
+{-
+  foldM
+    (\array0 (i, x) -> do
+        jx <- reflect x
+        (array1, jx1) <- setObjectArrayElement array0 i jx
+        deleteLocalRef jx1
+        return array1
+    )
+    array (zip [0..n-1] xs)
+
+  borrow array $ \array0 ->
+    forM_ (zip [0..n-1] xs) $ \(i, x) -> do
+      jx <- reflect x
+      jx1 <- borrow jx $ setObjectArrayElement (innerRef array0) i
+      deleteLocalRef jx1
+-}
+
+
