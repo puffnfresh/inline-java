@@ -34,23 +34,23 @@ library
     Foreign.JNI.Types
     Foreign.JNI.String
     Foreign.JNI.Internal
+  other-modules:
+    Foreign.JNI.NativeMethod
   if impl(ghc >= 8.9)
     exposed-modules:
       Foreign.JNI.Linear
       Foreign.JNI.Types.Linear
       Linear.Extras
       Unsafe.Linear.Extras
-  other-modules:
-    Foreign.JNI.NativeMethod
+    build-depends:
+      linear-base
   build-depends:
     base >=4.7 && <5,
     bytestring >=0.10,
     choice >=0.2.0,
     containers >=0.5,
     constraints >=0.8,
-    deepseq >=1.4.2,
-    linear-base
---    template-haskell
+    deepseq >=1.4.2
   if impl(ghc < 8.2.1)
     build-depends:
       inline-c >=0.5.6.1 && <0.6
