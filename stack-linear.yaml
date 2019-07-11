@@ -1,6 +1,7 @@
 require-stack-version: ">= 1.6"
 
 resolver: lts-13.22
+compiler: ghc-8.9
 skip-ghc-check: true
 system-ghc: true
 
@@ -38,11 +39,7 @@ extra-deps:
 
 allow-newer: true
 
-nix:
-  shell-file: shell.nix
-  path: ["nixpkgs=./nixpkgs.nix"]
-
 docker:
   enable: false
-  image: tweag/inline-java
-  stack-exe: image
+  image: tweag/linear-types:1.0.5
+  stack-exe: download
