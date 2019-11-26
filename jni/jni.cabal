@@ -57,7 +57,7 @@ library
       Foreign.JNI.Types.Safe
   else
     build-depends:
-      singletons >=2.5
+      singletons >=2.6
   build-tools: cpphs
   default-language: Haskell2010
 

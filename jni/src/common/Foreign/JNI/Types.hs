@@ -9,6 +9,7 @@
 {-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -19,7 +20,7 @@ module Foreign.JNI.Types
   ( JType(..)
   , IsPrimitiveType
   , IsReferenceType
-  , Sing(..)
+  , SType(..)
   , type (<>)
     -- * JNI types
   , J(..)
@@ -74,8 +75,10 @@ import Data.ByteString.Builder (Builder)
 import Data.Char (chr, ord)
 import Data.Constraint (Dict(..))
 import Data.Int
+import Data.Kind (Type)
 import qualified Data.Map as Map
 import Data.Singletons
+import Data.Singletons.Prelude.List
 import Data.Word
 import Foreign.C (CChar)
 import Foreign.ForeignPtr
@@ -142,23 +145,25 @@ singToIsReferenceType tysing = case tysing of
     SGeneric tysing' _ -> (\Dict -> Dict) <$> singToIsReferenceType tysing'
     SVoid -> Nothing
 
-data instance Sing (a :: JType) where
+data SType :: JType -> Type where
   -- Using String instead of JNI.String for the singleton data constructors
   -- is an optimization. Otherwise, the comparisons in Language.Java.call
   -- and callStatic would involve allocations and cannot be cached.
   --
   -- See commit 3da51a4 and https://github.com/tweag/inline-java/issues/11
-  SClass :: String -> Sing ('Class sym)
-  SIface :: String -> Sing ('Iface sym)
-  SPrim :: String -> Sing ('Prim sym)
-  SArray :: Sing ty -> Sing ('Array ty)
-  SGeneric :: Sing ty -> Sing tys -> Sing ('Generic ty tys)
-  SVoid :: Sing 'Void
+  SClass :: String -> SType ('Class sym)
+  SIface :: String -> SType ('Iface sym)
+  SPrim :: String -> SType ('Prim sym)
+  SArray :: SType ty -> SType ('Array ty)
+  SGeneric :: SType ty -> SList tys -> SType ('Generic ty tys)
+  SVoid :: SType 'Void
+
+type instance Sing @JType = SType
 
 realShowsPrec :: Show a => Int -> a -> ShowS
 realShowsPrec = showsPrec
 
-instance Show (Sing (a :: JType)) where
+instance Show (SType (a :: JType)) where
   showsPrec d (SClass s) = showParen (d > 10) $
       showString "SClass " . realShowsPrec 11 s
   showsPrec d (SIface s) = showParen (d > 10) $

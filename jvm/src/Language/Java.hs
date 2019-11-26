@@ -282,18 +282,18 @@ classOf x = JNI.fromChars (symbolVal (Proxy :: Proxy sym)) `const` coerce x
 -- 'findClass' is used by default.
 --
 setGetClassFunction
-  :: (forall ty. IsReferenceType ty => Sing (ty :: JType) -> IO JClass)
+  :: (forall ty. IsReferenceType ty => SType (ty :: JType) -> IO JClass)
   -> IO ()
 setGetClassFunction f = writeIORef getClassFunctionRef $ GetClassFun f
 
 -- | Yields a class referece. It behaves as 'findClass' unless
 -- 'setGetClassFunction' is used.
-getClass :: IsReferenceType ty => Sing (ty :: JType) -> IO JClass
+getClass :: IsReferenceType ty => SType (ty :: JType) -> IO JClass
 getClass s = readIORef getClassFunctionRef >>= \(GetClassFun f) -> f s
 
 newtype GetClassFun =
     GetClassFun (forall ty. IsReferenceType ty =>
-                   Sing (ty :: JType) -> IO JClass
+                   SType (ty :: JType) -> IO JClass
                 )
 
 {-# NOINLINE getClassFunctionRef #-}
@@ -319,9 +319,9 @@ new
 {-# INLINE new #-}
 new args = do
     let argsings = map jtypeOf args
-        voidsing = sing :: Sing 'Void
+        voidsing = sing :: SType 'Void
         klass = unsafeDupablePerformIO $ do
-          lk <- getClass (sing :: Sing ('Class sym))
+          lk <- getClass (sing :: SType ('Class sym))
           gk <- newGlobalRef lk
           deleteLocalRef lk
           return gk
@@ -344,7 +344,7 @@ newArray
   -> IO (J ('Array ty))
 {-# INLINE newArray #-}
 newArray sz = do
-    let tysing = sing :: Sing ty
+    let tysing = sing :: SType ty
     case tysing of
       SPrim "boolean" -> unsafeCast <$> newBooleanArray sz
       SPrim "byte" -> unsafeCast <$> newByteArray sz
@@ -394,9 +394,9 @@ call
 {-# INLINE call #-}
 call obj mname args = do
     let argsings = map jtypeOf args
-        retsing = sing :: Sing ty2
+        retsing = sing :: SType ty2
         klass = unsafeDupablePerformIO $ do
-                  lk <- getClass (sing :: Sing ty1)
+                  lk <- getClass (sing :: SType ty1)
                   gk <- newGlobalRef lk
                   deleteLocalRef lk
                   return gk
@@ -426,7 +426,7 @@ callStatic
 {-# INLINE callStatic #-}
 callStatic cname mname args = do
     let argsings = map jtypeOf args
-        retsing = sing :: Sing ty
+        retsing = sing :: SType ty
         klass = unsafeDupablePerformIO $ do
                   lk <- getClass (SClass (JNI.toChars cname))
                   gk <- newGlobalRef lk
@@ -456,7 +456,7 @@ getStaticField
   -> IO a
 {-# INLINE getStaticField #-}
 getStaticField cname fname = do
-  let retsing = sing :: Sing ty
+  let retsing = sing :: SType ty
       klass = unsafeDupablePerformIO $ do
                 lk <- getClass (SClass (JNI.toChars cname))
                 gk <- newGlobalRef lk
